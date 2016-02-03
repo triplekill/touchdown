@@ -176,3 +176,45 @@ class Destroy(SimpleDestroy, Describe):
         if not self.resource.shared:
             for action in super(Destroy, self).destroy_object():
                 yield action
+
+
+class AcmeChallenge(Plan):
+
+    name = "acme:challenge"
+    challenge = "dns"
+
+    def change_txt_record(self, action, domain, value):
+        desc = self.get_service("describe", self.resource)
+        change_id = desc.client.change_resource_record_sets(
+            HostedZoneId=self.resource_id,
+            ChangeBatch={
+                "Changes": [{
+                    "Action": action,
+                    "ResourceRecordSet": {
+                        "Name": domain,
+                        "Type": "TXT",
+                        "TTL": 30,
+                        "ResourceRecords": [{
+                            "Value": "'{}'".format(value),
+                        }],
+                    }
+                }]
+            }
+        )["ChangeInfo"]["Id"]
+
+        waiter = desc.client.get_waiter("resource_record_sets_changed")
+        waiter.wait(Id=change_id)
+
+    def handle_challenge(self, acme, challenge, domain):
+        self.change_txt_record(
+            "CREATE",
+            challenge.validate_domain_name(domain),
+            challenge.validation(acme.key),
+        )
+
+    def cleanup_challenge(self, acme, challenge, domain):
+        self.change_txt_record(
+            "DELETE",
+            challenge.validate_domain_name(domain),
+            challenge.validation(acme.key),
+        )
