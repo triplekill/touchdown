@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .acme import Certificate
+from .acme import CertificateRequest
 
 
 __all__ = [
-    "Certificate",
+    "CertificateRequest",
 ]

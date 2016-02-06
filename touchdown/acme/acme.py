@@ -1,4 +1,4 @@
-# Copyright 2015 Isotoma Limited
+# Copyright 2016 Isotoma Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 import acme.challenges
 import acme.client
 import acme.jose
@@ -21,18 +19,17 @@ import acme.jose
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import ExtensionOID
 
 import OpenSSL.crypto
 
-from touchdown.core import argument
+from touchdown.core import argument, errors, resource
 from touchdown.core.plan import Plan
 from touchdown.interfaces import File, FileNotFound
 
-from .folder import LocalFolder
 
-
-class CertificateRequest(File):
+class CertificateRequest(resource.Resource):
 
     resource_name = "acme_certificate_request"
 
@@ -43,7 +40,7 @@ class CertificateRequest(File):
     certificate_body = argument.Resource(File)
     certificate_chain = argument.Resource(File)
 
-    validator = argument.Resource(Resource)
+    validator = argument.Resource(resource.Resource)
 
     endpoint = argument.String(default="https://acme-v01.api.letsencrypt.org/directory")
     expiration_threshold = argument.Integer(default=45)
@@ -77,11 +74,11 @@ class Apply(Plan):
     def generate_csr(self):
         builder = x509.CertificateSigningRequestBuilder()
         builder = builder.subject_name(x509.Name([
-            x509.NameAttribute(x509.NameOID.COMMON_NAME, self.resource.hosts[0]),
-        ])
+            x509.NameAttribute(x509.NameOID.COMMON_NAME, self.resource.domains[0]),
+        ]))
         builder = builder.add_extension(
             x509.SubjectAlternativeName(
-                [x509.DNSName(host) for host in hosts]
+                [x509.DNSName(domain) for domain in self.resource.domains]
             ),
             critical=False,
         )
@@ -131,7 +128,7 @@ class Apply(Plan):
     def _get_certificate_chain(self, issuance):
         return "\n".join([
             OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, cert)
-            for cert in acme_client.fetch_chain(issuance)
+            for cert in self.acme.fetch_chain(issuance)
         ])
 
     def do_domain_authorizations(self):
@@ -139,7 +136,7 @@ class Apply(Plan):
             authz = self.request_challenge(domain)
             challenge, result = self.validate_challenges(authz)
             self.answer_challenges(challenge, domain)
-            # validator.cleanup_challenger(domain)
+            # validator.cleanup_challenger(domain)
             yield authz
 
     def _request_certificate(self):
@@ -163,12 +160,14 @@ class Apply(Plan):
             # "The first certificate nees to be issued"
             return True
 
-        if self.get_private_key().public_key().public_numbers() != .....:
+        private_numbers = self.get_private_key().public_key().public_numbers()
+        public_numbers = certificate.public_key().public_numbers()
+        if private_numbers != public_numbers:
             # "The 'private_key' has changed so the certificate needs to be reissued"
             return True
 
         if certificate.subject not in self.domains:
-            # "The subject of the certificate is not one of the requested 'domains'"
+            # "The subject of the certificate is not one of the requested 'domains'"
             return True
 
         ext = certificate.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
