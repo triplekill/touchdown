@@ -21,6 +21,7 @@ import sys
 
 from touchdown.core import errors, goals, map
 from touchdown.core.workspace import Touchdownfile
+from touchdown.core.selectors import Selector
 from touchdown.frontends import ConsoleFrontend
 
 
@@ -44,7 +45,6 @@ class SubCommand(object):
 
     def __call__(self, args):
         try:
-            self.workspace.load()
             g = self.goal(
                 self.workspace,
                 self.console,
@@ -76,10 +76,26 @@ def configure_parser(parser, workspace, console):
         ))
 
 
+class SelectorAction(argparse.Action):
+
+    def __init__(self, option_strings, dest, nargs=None, **kwargs):
+        kwargs['nargs'] = '*'
+        super(SelectorAction, self).__init__(option_strings, dest, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        root = Selector(parser.workspace).find(values)
+        if not root:
+            raise ValueError("No resources match the selectors {}".format(values))
+        setattr(namespace, self.dest, root)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Manage your infrastructure")
+    parser.workspace = Touchdownfile()
+    parser.workspace.load()
+    parser.add_argument('selectors', action=SelectorAction)
     console = ConsoleFrontend()
-    configure_parser(parser, Touchdownfile(), console)
+    configure_parser(parser, parser.workspace, console)
     args = parser.parse_args(argv or sys.argv[1:])
 
     if args.debug:

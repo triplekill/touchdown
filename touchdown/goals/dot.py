@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from touchdown.core import plan
+from touchdown.core import plan, dependencies
 from touchdown.core.goals import Goal, register
 
 
@@ -26,10 +26,12 @@ class Dot(Goal):
     def get_plan_class(self, resource):
         return plan.NullPlan
 
-    def get_digraph(self):
+    def get_digraph(self, root):
+        root = root[0]
         graph = ["digraph ast {"]
 
-        for node, deps in self.get_plan_order().items():
+        map = dependencies.DependencyMap(root)
+        for node, deps in map.items():
             if node.dot_ignore:
                 continue
             graph.append('{} [label="{}"];'.format(id(node), node))
@@ -41,7 +43,7 @@ class Dot(Goal):
         graph.append("}")
         return "\n".join(graph)
 
-    def execute(self):
-        self.ui.echo(self.get_digraph())
+    def execute(self, selectors):
+        self.ui.echo(self.get_digraph(selectors))
 
 register(Dot)
