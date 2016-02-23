@@ -25,6 +25,9 @@ class GoalFactory(object):
     def __init__(self):
         self.goals = {}
 
+    def get(self, name):
+        return self.goals[name]
+
     def register(self, cls):
         self.goals[cls.name] = cls
 
@@ -107,6 +110,7 @@ class Goal(object):
 
 
 goals = GoalFactory()
+get = goals.get
 register = goals.register
 registered = goals.registered
 create = goals.create

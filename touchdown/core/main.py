@@ -16,7 +16,6 @@ from __future__ import print_function
 
 import argparse
 import inspect
-import logging
 import sys
 
 from touchdown.core import errors, goals, map
@@ -25,12 +24,27 @@ from touchdown.core.selectors import Selector
 from touchdown.frontends import ConsoleFrontend
 
 
-class SubCommand(object):
+USAGE = "%(prog)s [<selector> ...] <command> [parameters]"
 
-    def __init__(self, goal, workspace, console):
-        self.goal = goal
+
+class Action(object):
+
+    def __init__(self, workspace, selectors, console, goal):
         self.workspace = workspace
+        self.selectors = selectors
+        self.goal = goal
         self.console = console
+        self.parser = argparse.ArgumentParser(
+            usage=USAGE,
+            add_help=False,
+        )
+        self.parser.add_argument("--debug", default=False, action="store_true")
+        self.parser.add_argument("--serial", default=False, action="store_true")
+        self.parser.add_argument("--unattended", default=False, action="store_true")
+        goal.setup_argparse(self.parser)
+
+    def print_help(self):
+        print("HELP")
 
     def get_args_and_kwargs(self, callable, namespace):
         argspec = inspect.getargspec(callable)
@@ -43,7 +57,10 @@ class SubCommand(object):
                 kwargs[k] = v
         return args, kwargs
 
-    def __call__(self, args):
+    def __call__(self, *args):
+        if len(args) == 1 and args[0] == "help":
+            return self.print_help()
+        args = self.parser.parse_args(args)
         try:
             g = self.goal(
                 self.workspace,
@@ -60,50 +77,95 @@ class SubCommand(object):
             self.console.finish()
 
 
-def configure_parser(parser, workspace, console):
-    parser.add_argument("--debug", default=False, action="store_true")
-    parser.add_argument("--serial", default=False, action="store_true")
-    parser.add_argument("--unattended", default=False, action="store_true")
+class SelectorOrAction(object):
 
-    sub = parser.add_subparsers()
-    for name, goal in goals.registered():
-        p = sub.add_parser(name, help=getattr(goal, "__doc__", ""))
-        goal.setup_argparse(p)
-        p.set_defaults(func=SubCommand(
-            goal,
-            workspace,
-            console,
-        ))
+    def __init__(self, workspace, selectors):
+        self.workspace = workspace
+        self.selectors = selectors
+        self.parser = argparse.ArgumentParser(
+            usage=USAGE,
+            add_help=False,
+        )
+        self.parser.add_argument('selector', action='store')
 
+    def print_help(self):
+        h = argparse.HelpFormatter("touchdown")
 
-class SelectorAction(argparse.Action):
+        h.add_text("The current expression is: {!r}".format(" ".join(self.selectors)))
 
-    def __init__(self, option_strings, dest, nargs=None, **kwargs):
-        kwargs['nargs'] = '*'
-        super(SelectorAction, self).__init__(option_strings, dest, **kwargs)
+        matches = Selector(self.workspace).find(self.selectors)
+        if not matches:
+            h.add_text("This expression has *no* matches")
+            return
 
-    def __call__(self, parser, namespace, values, option_string=None):
-        root = Selector(parser.workspace).find(values)
-        if not root:
-            raise ValueError("No resources match the selectors {}".format(values))
-        setattr(namespace, self.dest, root)
+        h.start_section("Available commands")
+        for name, goal in goals.registered():
+            for match in matches:
+                if not hasattr(match, "meta") or name not in match.meta.plans:
+                    break
+            else:
+                h.add_text(name)
+        h.end_section()
+
+        h.start_section("This expression matches the following resources")
+        h.add_text("\n".join(" * {}".format(m) for m in matches))
+        h.end_section()
+
+        h.start_section("This resource is dependended on by")
+        depends = set()
+        for node in matches:
+            for dep in Selector(self.workspace).backward.map.get(node, set()):
+                depends.add(":".join((dep.resource_name, getattr(dep, "name", ""))))
+
+        depends = list(depends)
+        depends.sort()
+        h.add_text("\n".join(" * {}".format(r) for r in depends))
+        h.end_section()
+
+        h.start_section("This resource depends on")
+        depends_on = set()
+        for node in matches:
+            for dep in node.dependencies:
+                depends_on.add(":".join((dep.resource_name, getattr(dep, "name", ""))))
+        depends_on = list(depends_on)
+        depends_on.sort()
+        h.add_text("\n".join(" * {}".format(r) for r in depends_on))
+        h.end_section()
+
+        print(h.format_help())
+
+    def get_goal(self, goal, parents):
+        for node in parents:
+            if not hasattr(node, "meta") or goal not in node.meta.plans:
+                return
+        return goals.get(goal)
+
+    def __call__(self, *args):
+        parents = Selector(self.workspace).find(self.selectors)
+        if not parents:
+            raise ValueError("No resources match the selectors {}".format(self.selectors))
+
+        if len(args) == 0:
+            return self.print_help()
+
+        known, leftover = self.parser.parse_known_args(args)
+
+        if known.selector == "help":
+            return self.print_help()
+
+        goal = self.get_goal(known.selector, parents)
+        if goal:
+            return Action(self.workspace, self.selectors, ConsoleFrontend(), goal)(*leftover)
+
+        return SelectorOrAction(self.workspace, self.selectors + [known.selector])(*leftover)
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Manage your infrastructure")
-    parser.workspace = Touchdownfile()
-    parser.workspace.load()
-    parser.add_argument('selectors', action=SelectorAction)
-    console = ConsoleFrontend()
-    configure_parser(parser, parser.workspace, console)
-    args = parser.parse_args(argv or sys.argv[1:])
+    workspace = Touchdownfile()
+    workspace.load()
 
-    if args.debug:
-        logging.basicConfig(level=logging.DEBUG, format="%(name)s: %(message)s")
-
-    console.interactive = not args.unattended
-
-    args.func(args)
+    argv = argv or sys.argv[1:]
+    return SelectorOrAction(workspace, [])(*argv)
 
 
 if __name__ == "__main__":
