@@ -16,7 +16,13 @@ from __future__ import print_function
 
 import argparse
 import inspect
+import subprocess
 import sys
+
+from docutils.core import publish_string
+from docutils.writers import manpage
+
+from botocore.docs.bcdoc.restdoc import ReSTDocument
 
 from touchdown.core import errors, goals, map
 from touchdown.core.workspace import Touchdownfile
@@ -89,29 +95,45 @@ class SelectorOrAction(object):
         self.parser.add_argument('selector', action='store')
 
     def print_help(self):
-        h = argparse.HelpFormatter("touchdown")
+        doc = ReSTDocument()
+        doc.style.h1("Touchdown")
 
-        h.add_text("The current expression is: {!r}".format(" ".join(self.selectors)))
+        doc.style.start_p()
+        doc.write("The current expression is: {!r}".format(" ".join(self.selectors)))
+        doc.style.end_p()
 
         matches = Selector(self.workspace).find(self.selectors)
         if not matches:
-            h.add_text("This expression has *no* matches")
+            doc.style.start_p()
+            doc.write("This expression has *no* matches")
             return
 
-        h.start_section("Available commands")
+        doc.style.h2("Available commands")
+        doc.style.start_p()
+        doc.write("The following subcommands are available for the resources selected:")
+        doc.style.end_p()
+        doc.style.start_ul()
         for name, goal in goals.registered():
             for match in matches:
                 if not hasattr(match, "meta") or name not in match.meta.plans:
                     break
             else:
-                h.add_text(name)
-        h.end_section()
+                doc.style.li(name)
+        doc.style.end_ul()
 
-        h.start_section("This expression matches the following resources")
-        h.add_text("\n".join(" * {}".format(m) for m in matches))
-        h.end_section()
+        doc.style.h2("Expression matches")
+        doc.style.start_p()
+        doc.write("This expression matches the following resources:")
+        doc.style.end_p()
+        doc.style.start_ul()
+        for m in matches:
+            doc.style.li(":".join((m.resource_name, getattr(m, "name", ""))))
+        doc.style.end_ul()
 
-        h.start_section("This resource is dependended on by")
+        doc.style.h2("Outgoing references")
+        doc.style.start_p()
+        doc.write("This resource is dependended on by:")
+        doc.style.end_p()
         depends = set()
         for node in matches:
             for dep in Selector(self.workspace).backward.map.get(node, set()):
@@ -119,20 +141,30 @@ class SelectorOrAction(object):
 
         depends = list(depends)
         depends.sort()
-        h.add_text("\n".join(" * {}".format(r) for r in depends))
-        h.end_section()
+        doc.style.start_ul()
+        [doc.style.li(r) for r in depends]
+        doc.style.end_ul()
 
-        h.start_section("This resource depends on")
+        doc.style.h2("Incoming references")
+        doc.style.start_p()
+        doc.write("This resource depends on:")
+        doc.style.end_p()
         depends_on = set()
         for node in matches:
-            for dep in node.dependencies:
+            for dep in Selector(self.workspace).forward.map.get(node, set()):
                 depends_on.add(":".join((dep.resource_name, getattr(dep, "name", ""))))
         depends_on = list(depends_on)
         depends_on.sort()
-        h.add_text("\n".join(" * {}".format(r) for r in depends_on))
-        h.end_section()
+        doc.style.start_ul()
+        [doc.style.li(r) for r in depends_on]
+        doc.style.end_ul()
 
-        print(h.format_help())
+        man = publish_string(doc.getvalue(), writer=manpage.Writer())
+        p = subprocess.Popen(["groff", "-man", "-T", "ascii"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = p.communicate(man)
+
+        p = subprocess.Popen(['less', '-R'], stdin=subprocess.PIPE)
+        p.communicate(stdout)
 
     def get_goal(self, goal, parents):
         for node in parents:
@@ -143,7 +175,8 @@ class SelectorOrAction(object):
     def __call__(self, *args):
         parents = Selector(self.workspace).find(self.selectors)
         if not parents:
-            raise ValueError("No resources match the selectors {}".format(self.selectors))
+            print("No resources match the selectors '{}'".format(" ".join(self.selectors)))
+            return
 
         if len(args) == 0:
             return self.print_help()

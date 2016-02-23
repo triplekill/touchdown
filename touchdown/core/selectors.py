@@ -31,7 +31,7 @@ class Selector(object):
         self.forward = DependencyMap(workspace)
         self.backward = DependencyMap(workspace, True)
         self.start = Start([])
-        self.backward.map[self.start] = self.find_all_tips()
+        self.forward.map[self.start] = self.find_all_tips()
 
     def is_node(self, node, expression):
         """ Returns True if a given node matches a selection expression """
@@ -49,7 +49,7 @@ class Selector(object):
 
     def find_all_tips(self):
         """ Yield all nodes that have no dependencies """
-        for node, dependencies in self.forward.items():
+        for node, dependencies in self.backward.items():
             if len(dependencies) > 0:
                 continue
             yield node
@@ -61,7 +61,7 @@ class Selector(object):
 
         while queue:
             node = queue.pop(0)
-            for dep in self.backward.map[node]:
+            for dep in self.forward.map[node]:
                 if dep not in visited and dep not in queue:
                     queue.append(dep)
             if self.is_node(node, selector):
