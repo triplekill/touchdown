@@ -53,6 +53,7 @@ class FuselageResource(resource.Resource):
             "resource_name": underscore(resource_type.__resource_name__),
             "fuselage_class": resource_type,
             "root": argument.Resource(Bundle),
+            "virtual": True,
         }
 
         for arg, klass in resource_type.__args__.items():

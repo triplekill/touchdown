@@ -41,6 +41,7 @@ def CloudFrontResourceList():
 class S3Origin(Resource):
 
     resource_name = "s3_origin"
+    virtual = True
     extra_serializers = {
         "S3OriginConfig": serializers.Dict(
             OriginAccessIdentity=serializers.Argument("origin_access_identity"),

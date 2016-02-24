@@ -28,6 +28,7 @@ from .vpc import VPC
 class PortRange(Resource):
 
     resource_name = "port_range"
+    virtual = True
 
     start = argument.Integer(default=1, min=1, max=65535, field="From")
     end = argument.Integer(default=65535, min=1, max=65535, field="To")
@@ -49,6 +50,7 @@ class PortRange(Resource):
 class IcmpTypeCode(Resource):
 
     resource_name = "icmp_type_code"
+    virtual = True
 
     type = argument.Integer(default=-1, field="Type")
     code = argument.Integer(default=-1, field="Code")
@@ -58,6 +60,7 @@ class Rule(Resource):
 
     resource_name = "rule"
     dot_ignore = True
+    virtual = True
 
     network = argument.IPNetwork(field="CidrBlock")
     protocol = argument.String(default='tcp', choices=['tcp', 'udp', 'icmp'], field="Protocol")

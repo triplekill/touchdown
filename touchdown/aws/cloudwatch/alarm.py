@@ -28,6 +28,7 @@ class AlarmDestination(Adapter):
 class Dimension(Resource):
 
     resource_name = "dimension"
+    virtual = True
 
     name = argument.String(field="Name", min=1, max=255)
     value = argument.String(field="Value", min=1, max=255)

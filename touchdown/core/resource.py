@@ -238,9 +238,20 @@ class Resource(six.with_metaclass(ResourceType)):
         if self.parent:
             return self.parent.workspace
 
+    def find_concrete_parent(self):
+        node = self
+        while node and getattr(node, "virtual", False):
+            node = node.parent
+        return node
+
     def add_dependency(self, dependency):
-        if self.workspace != dependency:
-            self.dependencies.add(dependency)
+        if self.workspace == dependency:
+            return
+        parent = self.find_concrete_parent()
+        child = dependency.find_concrete_parent()
+        if parent == child:
+            return
+        parent.dependencies.add(child)
 
     def __str__(self):
         if hasattr(self, "name"):

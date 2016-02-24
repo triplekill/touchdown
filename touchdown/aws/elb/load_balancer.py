@@ -30,6 +30,7 @@ from ..vpc import SecurityGroup, Subnet
 class Listener(Resource):
 
     resource_name = "listener"
+    virtual = True
 
     protocol = argument.String(field="Protocol")
     port = argument.Integer(field="LoadBalancerPort")
@@ -46,6 +47,7 @@ class HealthCheck(Resource):
 
     resource_name = "health_check"
     dot_ignore = True
+    virtual = True
 
     interval = argument.Integer(field="Interval")
     check = argument.String(field="Target")

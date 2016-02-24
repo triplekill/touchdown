@@ -23,6 +23,7 @@ from .vpc import VPC
 class Rule(Resource):
 
     resource_name = "rule"
+    virtual = True
 
     @property
     def dot_ignore(self):

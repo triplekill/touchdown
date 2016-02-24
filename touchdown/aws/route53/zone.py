@@ -35,6 +35,7 @@ def _normalize(dns_name):
 class Record(Resource):
 
     resource_name = "record"
+    virtual = True
 
     name = argument.String(field="Name")
     type = argument.String(field="Type")

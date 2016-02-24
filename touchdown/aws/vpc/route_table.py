@@ -24,6 +24,7 @@ from .vpn_gateway import VpnGateway
 class Route(Resource):
 
     resource_name = "route"
+    virtual = True
 
     destination_cidr = argument.IPNetwork(field="DestinationCidrBlock")
     internet_gateway = argument.Resource(InternetGateway, field="GatewayId")

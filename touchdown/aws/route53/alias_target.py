@@ -17,3 +17,4 @@ from touchdown.core.resource import Resource
 
 class AliasTarget(Resource):
     resource_name = "alias_target"
+    virtual = True

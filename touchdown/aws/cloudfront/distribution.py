@@ -35,6 +35,7 @@ class CustomOrigin(Resource):
 
     resource_name = "custom_origin"
     dot_ignore = True
+    virtual = True
 
     extra_serializers = {
         "CustomHeaders": serializers.Dict(
@@ -73,6 +74,7 @@ class DefaultCacheBehavior(Resource):
 
     resource_name = "default_cache_behaviour"
     dot_ignore = True
+    virtual = True
 
     extra_serializers = {
         # TrustedSigners are not supported yet, so include stub in serialized form
@@ -129,6 +131,7 @@ class ErrorResponse(Resource):
 
     resource_name = "error_response"
     dot_ignore = True
+    virtual = True
 
     error_code = argument.Integer(field="ErrorCode", choices=[
         "400", "403", "404", "405", "414",
@@ -147,6 +150,7 @@ class LoggingConfig(Resource):
 
     resource_name = "logging_config"
     dot_ignore = True
+    virtual = True
 
     enabled = argument.Boolean(field="Enabled", default=False)
     include_cookies = argument.Boolean(field="IncludeCookies", default=False)
