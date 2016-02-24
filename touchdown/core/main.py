@@ -26,7 +26,6 @@ from botocore.docs.bcdoc.restdoc import ReSTDocument
 
 from touchdown.core import errors, goals, map
 from touchdown.core.workspace import Touchdownfile
-from touchdown.core.selectors import Selector
 from touchdown.frontends import ConsoleFrontend
 
 
@@ -102,7 +101,7 @@ class SelectorOrAction(object):
         doc.write("The current expression is: {!r}".format(" ".join(self.selectors)))
         doc.style.end_p()
 
-        matches = Selector(self.workspace).find(self.selectors)
+        matches = self.workspace.resources.find(self.selectors)
         if not matches:
             doc.style.start_p()
             doc.write("This expression has *no* matches")
@@ -127,7 +126,7 @@ class SelectorOrAction(object):
         doc.style.end_p()
         doc.style.start_ul()
         for m in matches:
-            doc.style.li(":".join((m.resource_name, getattr(m, "name", ""))))
+            doc.style.li(":".join((m.resource_name, getattr(m, "name", "") or '')))
         doc.style.end_ul()
 
         doc.style.h2("Outgoing references")
@@ -135,9 +134,10 @@ class SelectorOrAction(object):
         doc.write("This resource is dependended on by:")
         doc.style.end_p()
         depends = set()
+        map = self.workspace.resources.backward.map
         for node in matches:
-            for dep in Selector(self.workspace).backward.map.get(node, set()):
-                depends.add(":".join((dep.resource_name, getattr(dep, "name", ""))))
+            for dep in map.get(node, set()):
+                depends.add(":".join((dep.resource_name, getattr(dep, "name", "") or '')))
 
         depends = list(depends)
         depends.sort()
@@ -150,9 +150,10 @@ class SelectorOrAction(object):
         doc.write("This resource depends on:")
         doc.style.end_p()
         depends_on = set()
+        map = self.workspace.resources.forward.map
         for node in matches:
-            for dep in Selector(self.workspace).forward.map.get(node, set()):
-                depends_on.add(":".join((dep.resource_name, getattr(dep, "name", ""))))
+            for dep in map.get(node, set()):
+                depends_on.add(":".join((dep.resource_name, getattr(dep, "name", "") or '')))
         depends_on = list(depends_on)
         depends_on.sort()
         doc.style.start_ul()
@@ -173,7 +174,7 @@ class SelectorOrAction(object):
         return goals.get(goal)
 
     def __call__(self, *args):
-        parents = Selector(self.workspace).find(self.selectors)
+        parents = self.workspace.resources.find(self.selectors)
         if not parents:
             print("No resources match the selectors '{}'".format(" ".join(self.selectors)))
             return

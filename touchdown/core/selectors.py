@@ -15,69 +15,113 @@
 from touchdown.core.dependencies import DependencyMap
 
 
-class Start(object):
-
-    resource_name = "all-resources"
-    dot_ignore = True
-
-    def __init__(self, tips):
-        self.dependencies = set(tips)
+class DoesNotExist(Exception):
+    pass
 
 
-class Selector(object):
+class MultipleResourcesFound(Exception):
+    pass
 
-    def __init__(self, workspace):
-        self.workspace = workspace
-        self.forward = DependencyMap(workspace)
-        self.backward = DependencyMap(workspace, True)
-        self.start = Start([])
-        self.forward.map[self.start] = self.find_all_tips()
 
-    def is_node(self, node, expression):
+class Traversal(object):
+
+    def __init__(self, root, parent):
+        self.root = root
+        self.parent = parent
+        self._cache = None
+
+    def resolve(self):
+        if self._cache is None:
+            self._cache = list(self._get_matches())
+        return self._cache
+
+    def iterator(self):
+        for result in self.resolve():
+            yield result
+
+    def get(self):
+        if len(self) == 0:
+            raise DoesNotExist()
+        if len(self) > 1:
+            raise MultipleResourcesFound()
+        return list(self)[0]
+
+    def outgoing(self, expression):
+        return Outgoing(self.root, self, expression)
+
+    def __len__(self):
+        return len(self.resolve())
+
+    def __iter__(self):
+        return self.iterator()
+
+
+class Outgoing(Traversal):
+
+    def __init__(self, root, parent, expression):
+        super(Outgoing, self).__init__(root, parent)
+        self.expression = expression
+
+    def matches(self, node):
         """ Returns True if a given node matches a selection expression """
-        if ":" in expression:
-            resource_class, resource_name = expression.split(":", 1)
+        if ":" in self.expression:
+            resource_class, resource_name = self.expression.split(":", 1)
         else:
-            resource_class, resource_name = '', expression
+            resource_class, resource_name = '', self.expression
 
         if resource_class and resource_class != node.resource_name:
             return False
 
         if resource_name and resource_name != getattr(node, "name", None):
             return False
+
         return True
 
-    def find_all_tips(self):
-        """ Yield all nodes that have no dependencies """
-        for node, dependencies in self.backward.items():
-            if len(dependencies) > 0:
-                continue
-            yield node
-
-    def find_matching(self, node, selector):
-        """ Starting from node, traverse the graph looking for matches of selector """
-        queue = [node]
+    def _get_matches(self):
+        queue = list(self.parent.resolve())
         visited = set()
-
         while queue:
             node = queue.pop(0)
-            for dep in self.forward.map[node]:
+            for dep in self.root.backward.map[node]:
                 if dep not in visited and dep not in queue:
                     queue.append(dep)
-            if self.is_node(node, selector):
+            print(node)
+            if self.matches(node):
                 yield node
             visited.add(node)
 
-    def find(self, selectors):
-        queue = set((self.start,))
-        found = set()
-        for selector in selectors:
-            while queue:
-                node = queue.pop()
-                found.update(self.find_matching(node, selector))
-            queue = found
-            found = set()
 
-        matches = list(queue)
-        matches.sort(key=lambda r: ":".join((r.resource_name, getattr(r, "name", ""))))
+class Walker(object):
+
+    def __init__(self, workspace):
+        self.workspace = workspace
+        self.forward = DependencyMap(workspace)
+        self.backward = DependencyMap(workspace, True)
+
+    def most_depended(self):
+        matches = set()
+        for node, dependencies in self.backward.items():
+            if len(dependencies) > 0:
+                continue
+            matches.add(node)
+        retval = Traversal(self, None)
+        retval._cache = matches
+        return retval
+
+    def least_depended(self):
+        matches = set()
+        for node, dependencies in self.forward.items():
+            if len(dependencies) > 0:
+                continue
+            matches.add(node)
+        retval = Traversal(self, None)
+        retval._cache = matches
+        return retval
+
+    def find(self, selectors):
+        expr = self.least_depended()
+        for selector in selectors:
+            expr = expr.outgoing(selector)
+        matches = list(expr)
+        matches.sort(key=lambda r: ":".join((r.resource_name, getattr(r, "name", "") or '')))
         return matches
