@@ -49,6 +49,12 @@ class Traversal(object):
     def outgoing(self, expression):
         return Outgoing(self.root, self, expression)
 
+    def adjacent_incoming(self):
+        return AdjacentIncoming(self.root, self)
+
+    def adjacent_outgoing(self):
+        return AdjacentOutgoing(self.root, self)
+
     def __len__(self):
         return len(self.resolve())
 
@@ -85,10 +91,25 @@ class Outgoing(Traversal):
             for dep in self.root.backward.map[node]:
                 if dep not in visited and dep not in queue:
                     queue.append(dep)
-            print(node)
             if self.matches(node):
                 yield node
             visited.add(node)
+
+
+class AdjacentIncoming(Traversal):
+
+    def _get_matches(self):
+        for node in self.parent.resolve():
+            for incoming in self.root.backward.map[node]:
+                yield incoming
+
+
+class AdjacentOutgoing(Traversal):
+
+    def _get_matches(self):
+        for node in self.parent.resolve():
+            for incoming in self.root.forward.map[node]:
+                yield incoming
 
 
 class Walker(object):
@@ -122,6 +143,4 @@ class Walker(object):
         expr = self.least_depended()
         for selector in selectors:
             expr = expr.outgoing(selector)
-        matches = list(expr)
-        matches.sort(key=lambda r: ":".join((r.resource_name, getattr(r, "name", "") or '')))
-        return matches
+        return expr

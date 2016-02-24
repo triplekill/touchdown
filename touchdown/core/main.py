@@ -134,10 +134,8 @@ class SelectorOrAction(object):
         doc.write("This resource is dependended on by:")
         doc.style.end_p()
         depends = set()
-        map = self.workspace.resources.backward.map
-        for node in matches:
-            for dep in map.get(node, set()):
-                depends.add(":".join((dep.resource_name, getattr(dep, "name", "") or '')))
+        for dep in matches.adjacent_incoming():
+            depends.add(":".join((dep.resource_name, getattr(dep, "name", "") or '')))
 
         depends = list(depends)
         depends.sort()
@@ -150,10 +148,8 @@ class SelectorOrAction(object):
         doc.write("This resource depends on:")
         doc.style.end_p()
         depends_on = set()
-        map = self.workspace.resources.forward.map
-        for node in matches:
-            for dep in map.get(node, set()):
-                depends_on.add(":".join((dep.resource_name, getattr(dep, "name", "") or '')))
+        for dep in matches.adjacent_outgoing():
+            depends_on.add(":".join((dep.resource_name, getattr(dep, "name", "") or '')))
         depends_on = list(depends_on)
         depends_on.sort()
         doc.style.start_ul()
